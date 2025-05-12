@@ -2,17 +2,19 @@
 #include <fstream>
 
 #include "db.h"
+#include "csvhelper.h"
 
 int main(){
     using namespace DB;
+    using namespace CSV;
 
-    Table t = Table::open("wine");
-    Table::SchemaInfos s = t.getSchemaInfos();
+    CSVInfos infos = CSV::readChunk("datafiles/vinhos.csv", 50);
+    std::cout << infos.fields[0] << " " << infos.fields [1] << " " << infos.fields[2] << " " << infos.fields[3] << '\n';
+    
+    for (int i = 0; i < 50; ++i){
+        std::vector<std::string> d = infos.data[i];
 
-    std::vector<std::string> record = t.getRecordById(2);
-
-    for (int i = 0; i < record.size(); ++i){
-        std::cout << s.names[i] << ": " << record[i] << '\n';
+        std::cout << d[0] << " " << d[1] << " " << d[2] << " " << d[3] << '\n';
     }
 
     return 0;

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <string>
 
 #include "iohelper.h"
 
@@ -71,6 +72,18 @@ bool IOHelper::file_read(const char* filename, const int bytes_to_read, char* bu
         *read_bytes = file.gcount();
         return true;
     } else return false;
+}
+
+bool IOHelper::file_getLine(const char* filename, int lineIdx, std::string* lineBuffer){
+    if (!file_exists(filename) && !file_create(filename)) return false;
+    std::ifstream file(filename);
+
+    for (int i = 0; i < lineIdx; ++i){
+        std::getline(file, *lineBuffer); //skipping all other lines
+    }
+    std::getline(file, *lineBuffer);
+
+    return true;
 }
 
 

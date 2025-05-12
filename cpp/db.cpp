@@ -13,7 +13,7 @@
 #define PAGE_DATA_SIZE PAGE_SIZE - PAGE_HEADERS_MAX_SIZE //bytes
 #define PAGE_MAX_FIELDS PAGE_HEADERS_MAX_SIZE - 1
 
-#define ROWS_PER_PAGE 1
+#define RECORDS_PER_PAGE 1
 
 using namespace DB;
 using namespace IOHelper;
@@ -292,6 +292,9 @@ void Table::addField(const char* fieldName, const int size_in_bytes){
     std::string data_string = std::string(fieldName) + ':' + std::to_string(size_in_bytes) + ';';
     schema_file.write(data_string.c_str(), data_string.size());
 
+    schemaInfos.names.push_back(fieldName);
+    schemaInfos.sizes.push_back(size_in_bytes);
+    schemaInfos.field_count += 1;
     schemaInfos.totalSize += size_in_bytes;
 }
 
@@ -300,6 +303,7 @@ void Table::stopBuildingSchema(){
 
     isBuildingSchema = false;
     schema_size_in_bytes = -1;
+    schemaInfos.finished = true;
     schema_file.write("\0", 1); //Null terminator indicates that the schema is finished!
 }
 
@@ -341,12 +345,12 @@ void Table::insertRecord(std::vector<std::string> data){
     records_file.write(data_string.c_str(), data_string.size());
 }
 
-std::vector<std::string> Table::getRecordById(int id){
+Table::Record Table::getRecordById(int id){
     std::vector<std::string> data;
 
-    if (!schemaInfos.finished) return data;
-    if (records_file.size()/256 < id) return data;
-    if (id < 1) return data;
+    if (!schemaInfos.finished) return Record();
+    if (records_file.size()/256 < id) return Record();
+    if (id < 1) return Record();
 
     DBFile rf = records_file;
     {
@@ -376,5 +380,12 @@ std::vector<std::string> Table::getRecordById(int id){
         rf.stopReading();
     }
 
-    return data;
+    return Record {schemaInfos.names, data};
+}
+
+//Struct Table::Record
+void Table::Record::print(){
+    for (int i = 0; i < fields.size(); ++i){
+        std::cout << fields[i] << ": " << data[i] << '\n'; 
+    }
 }

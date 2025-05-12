@@ -46,6 +46,13 @@ namespace DB{
                 int field_count = -1;
             };
 
+            struct Record{
+                std::vector<std::string> fields = {""};
+                std::vector<std::string> data = {""};
+
+                void print();
+            };
+
         private:
             DBFile schema_file;
             DBFile records_file;
@@ -80,7 +87,7 @@ namespace DB{
 
             //records building
             void insertRecord(std::vector<std::string> data); //Must follow schema order
-            std::vector<std::string> getRecordById(int id);
+            Record getRecordById(int id);
     };
 };
 
