@@ -6,7 +6,7 @@ ponteiro: 4 bytes
 quantidade chave de busca: filhos - 1
 quantidade ponteiros: filhos + 1
 
-tamanho total do nó: 4*(filhos-1) + 4*(filhos+1) = 4*(filhos + filhos + 1 - 1) = 4*filhos bytes
+tamanho total do nó: 4*(filhos-1) + 4*(filhos+1) = 4*(filhos + filhos + 1 - 1) = 8*filhos bytes
 offset = 5
 
 estrutura do nó:
