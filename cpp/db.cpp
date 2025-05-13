@@ -102,6 +102,7 @@ bool Table::__isSchemaFinished(){
     {
     schema_file.startReading(schema_file.size());
 
+        if (schema_file.getReadBytes() == 0) return false;
         if (schema_file.getReadBuffer()[schema_file.getReadBytes()] == '\0') return true;
 
     schema_file.stopReading();
@@ -216,17 +217,15 @@ Table Table::open(const char* tableName){
     std::string records_fileName = std::string(tableName) + ".rcs";
 
     if (!DBFile::exists(schema_fileName.c_str())){
-        file_create(schema_fileName.c_str());
-        
+        file_create(schema_fileName.c_str());   
     }
 
     if (!DBFile::exists(records_fileName.c_str())){
         file_create(records_fileName.c_str());
     }
-
+    
     t.schema_file.path = schema_fileName;
     t.schemaInfos = t.__load_schemaInfos();
-
     t.records_file.path = records_fileName;
 
     return t;

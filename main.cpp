@@ -8,13 +8,20 @@ int main(){
     using namespace DB;
     using namespace CSV;
 
-    CSVInfos infos = CSV::readChunk("datafiles/vinhos.csv", 50);
-    std::cout << infos.fields[0] << " " << infos.fields [1] << " " << infos.fields[2] << " " << infos.fields[3] << '\n';
-    
-    for (int i = 0; i < 50; ++i){
-        std::vector<std::string> d = infos.data[i];
+    Table t = Table::open("carro");
 
-        std::cout << d[0] << " " << d[1] << " " << d[2] << " " << d[3] << '\n';
+    {
+        std::cout << "b";
+        t.startBuildingSchema();
+        std::cout << "e";
+
+        t.addField("marca", 20);
+        std::cout << "f";
+        t.addField("ano", 4);
+
+        std::cout << "g";
+        t.stopBuildingSchema();
+        std::cout << "h";
     }
 
     return 0;
