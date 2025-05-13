@@ -1,0 +1,13 @@
+<4 bytes quantidade filhos><1 byte para taxa de preenchimento> = 5 bytes 
+
+
+chave de busca: 4 bytes
+ponteiro: 4 bytes
+quantidade chave de busca: filhos - 1
+quantidade ponteiros: filhos + 1
+
+tamanho total do nó: 4*(filhos-1) + 4*(filhos+1) = 4*(filhos + filhos + 1 - 1) = 4*filhos bytes
+offset = 5
+
+estrutura do nó:
+<id_pai><id_1f><c1>......<id.nf><cn><padding>

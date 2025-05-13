@@ -8,20 +8,19 @@ int main(){
     using namespace DB;
     using namespace CSV;
 
-    Table t = Table::open("carro");
-
+    DBFile d = DBFile::open("teste.ss");
+    
     {
-        std::cout << "b";
-        t.startBuildingSchema();
-        std::cout << "e";
+        d.startReading(d.size());
 
-        t.addField("marca", 20);
-        std::cout << "f";
-        t.addField("ano", 4);
+        char* buffer = d.getReadBuffer();
+        int bytes = d.getReadBytes();
 
-        std::cout << "g";
-        t.stopBuildingSchema();
-        std::cout << "h";
+        for (int i = 0 ; i < bytes ; ++i){
+            std::cout << buffer[i];
+        }
+
+        d.stopReading();
     }
 
     return 0;

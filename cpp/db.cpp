@@ -101,13 +101,12 @@ void DBFile::stopReading(){
 bool Table::__isSchemaFinished(){
     {
     schema_file.startReading(schema_file.size());
-
-        if (schema_file.getReadBytes() == 0) return false;
-        if (schema_file.getReadBuffer()[schema_file.getReadBytes()] == '\0') return true;
+     
+        if (schema_file.getReadBuffer()[schema_file.getReadBytes() - 1] == (char) 3) return true;
 
     schema_file.stopReading();
     }
-    
+
     return false;
 }
 
@@ -303,7 +302,7 @@ void Table::stopBuildingSchema(){
     isBuildingSchema = false;
     schema_size_in_bytes = -1;
     schemaInfos.finished = true;
-    schema_file.write("\0", 1); //Null terminator indicates that the schema is finished!
+    schema_file.write("\x03", 1); //Null terminator indicates that the schema is finished!
 }
 
 void Table::insertRecord(std::vector<std::string> data){
