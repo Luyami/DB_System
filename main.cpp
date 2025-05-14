@@ -8,20 +8,18 @@ int main(){
     using namespace DB;
     using namespace CSV;
 
-    DBFile d = DBFile::open("teste.ss");
-    
+    Table t = Table::open("teste");
+
     {
-        d.startReading(d.size());
+        t.startBuildingSchema();
 
-        char* buffer = d.getReadBuffer();
-        int bytes = d.getReadBytes();
+            t.addField("name", 30);
+            t.addField("age", 2);
 
-        for (int i = 0 ; i < bytes ; ++i){
-            std::cout << buffer[i];
-        }
-
-        d.stopReading();
+        t.stopBuildingSchema();
     }
+
+    t.build_index("age", Index::Type::BPTree, Index::BuildingParams{50,32});
 
     return 0;
 }

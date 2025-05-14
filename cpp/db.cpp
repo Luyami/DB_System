@@ -1,5 +1,7 @@
 #include <stdexcept>
 #include <string>
+#include <algorithm>
+#include <cstring>
 #include <chrono>
 
 #include "iohelper.h"
@@ -8,11 +10,15 @@
 #include <iostream>
 #include <numeric>
 
-#define PAGE_SIZE 256 //bytes
-#define PAGE_HEADERS_MAX_SIZE 10 //bytes
-#define PAGE_DATA_SIZE PAGE_SIZE - PAGE_HEADERS_MAX_SIZE //bytes
-#define PAGE_MAX_FIELDS PAGE_HEADERS_MAX_SIZE - 1
+#define DB_FILES_DIR "dbfiles";
+#define DB_FILE_SCHEMA_EXTENSION ".sch";
+#define DB_FILE_RECORDS_EXTENSION ".rcs";
+#define DB_FILE_INDEX_EXTENSION ".idx";
 
+#define RECORDS_PAGE_SIZE 256 //bytes
+#define RECORDS_PAGE_HEADERS_MAX_SIZE 10 //bytes
+#define RECORDS_PAGE_DATA_SIZE RECORDS_PAGE_SIZE - RECORDS_PAGE_HEADERS_MAX_SIZE //bytes
+#define RECORDS_PAGE_MAX_FIELDS RECORDS_PAGE_HEADERS_MAX_SIZE - 1
 #define RECORDS_PER_PAGE 1
 
 using namespace DB;
@@ -95,6 +101,25 @@ void DBFile::stopReading(){
     isReading = false;
     free(read_buffer);
     read_bytes = -1;
+}
+
+//Class Index
+std::string  Index::getName()                {return name;}
+Index::Type  Index::getType()                {return type;}
+std::string  Index::getReferencingTable()    {return referencingTable;}
+std::string  Index::getSearchKey()           {return searchKey;}
+DBFile       Index::getIndexFile()           {return index_file;}
+
+//Class BPTreeIDX
+BPTreeIDX::BPTreeIDX(Index base, int max_children, int fill_factor){
+    this->name             = base.getName();
+    this->type             = base.getType();
+    this->referencingTable = base.getReferencingTable();
+    this->searchKey        = base.getSearchKey();
+    this->index_file       = base.getIndexFile();
+
+    this->max_children = max_children;
+    this->fill_factor  = fill_factor;
 }
 
 //Class Table
@@ -209,11 +234,14 @@ Table::SchemaInfos Table::__load_schemaInfos(){
 }
 
 Table Table::open(const char* tableName){
+    std::string dir = DB_FILES_DIR;
+
     //Setting table
     Table t;
+    t.name = tableName;
 
-    std::string schema_fileName = std::string(tableName) + ".sch";
-    std::string records_fileName = std::string(tableName) + ".rcs";
+    std::string schema_fileName  =  dir + "/" + std::string(tableName) + DB_FILE_SCHEMA_EXTENSION;
+    std::string records_fileName =  dir + "/" + std::string(tableName) + DB_FILE_RECORDS_EXTENSION;
 
     if (!DBFile::exists(schema_fileName.c_str())){
         file_create(schema_fileName.c_str());   
@@ -284,8 +312,8 @@ void Table::addField(const char* fieldName, const int size_in_bytes){
     //<field>:<field_size>;
 
     if (fieldExists(fieldName)) return;
-    if (schemaInfos.totalSize + size_in_bytes > PAGE_DATA_SIZE) return;
-    if (schemaInfos.field_count + 1 > PAGE_MAX_FIELDS) return;
+    if (schemaInfos.totalSize + size_in_bytes > RECORDS_PAGE_DATA_SIZE) return;
+    if (schemaInfos.field_count + 1 > RECORDS_PAGE_MAX_FIELDS) return;
 
     std::string data_string = std::string(fieldName) + ':' + std::to_string(size_in_bytes) + ';';
     schema_file.write(data_string.c_str(), data_string.size());
@@ -302,7 +330,7 @@ void Table::stopBuildingSchema(){
     isBuildingSchema = false;
     schema_size_in_bytes = -1;
     schemaInfos.finished = true;
-    schema_file.write("\x03", 1); //Null terminator indicates that the schema is finished!
+    schema_file.write("\x03", 1); //char 3 indicates that the schema is finished!
 }
 
 void Table::insertRecord(std::vector<std::string> data){
@@ -313,7 +341,7 @@ void Table::insertRecord(std::vector<std::string> data){
     if (!schemaInfos.finished) return;
     if (data.size() != schemaInfos.field_count) return;
 
-    //Checking if data not exceed bytes according to schema
+    //Checking if data doesn't exceed bytes according to schema
     for (int i = 0; i < data.size(); ++i){
         if (data[i].size() > schemaInfos.sizes[i]) return;
     }
@@ -336,7 +364,7 @@ void Table::insertRecord(std::vector<std::string> data){
 
     //Setting padding bytes
     int noPaddingBytes = data_string.size();
-    for (int i = 0; i < PAGE_SIZE - noPaddingBytes; ++i){
+    for (int i = 0; i < RECORDS_PAGE_SIZE - noPaddingBytes; ++i){
         data_string += (char) 3;
     }
 
@@ -352,7 +380,7 @@ Table::Record Table::getRecordById(int id){
 
     DBFile rf = records_file;
     {
-        rf.startReading(256, PAGE_SIZE * (id - 1));
+        rf.startReading(256, RECORDS_PAGE_SIZE * (id - 1));
 
             char* buffer = rf.getReadBuffer();
             int field_count = (int) buffer[0];
@@ -361,7 +389,7 @@ Table::Record Table::getRecordById(int id){
             std::string field_value = "";
             for (int i = 0; i < field_count; ++i){
                 int offset = (int) buffer[i + 1];
-                int nextOffset = i < field_count - 1 ? (int) buffer[i + 2] : PAGE_SIZE - 1;
+                int nextOffset = i < field_count - 1 ? (int) buffer[i + 2] : RECORDS_PAGE_SIZE - 1;
                 
                 for (int j = firstDataByteIdx + offset; j < firstDataByteIdx + nextOffset; ++j){
                     char c = buffer[j];
@@ -379,6 +407,57 @@ Table::Record Table::getRecordById(int id){
     }
 
     return Record {schemaInfos.names, data};
+}
+
+void Table::build_index(const char* searchKey, Index::Type idxType, Index::BuildingParams params){
+    if (!Table::fieldExists(searchKey)){
+        throw std::runtime_error("Can't use " + std::string(searchKey) + " as search key, because it isn't part of the schema!");
+    }
+
+    std::string dir = DB_FILES_DIR;
+
+    int searchKeyPos; //This indicates what field is being used as search key in the index header
+    searchKeyPos = std::distance(
+        schemaInfos.names.begin(),
+        std::find(schemaInfos.names.begin(), schemaInfos.names.end(), searchKey)
+    );
+
+    std::string idxName = this->name + std::to_string((int) idxType) + "_" + std::to_string(searchKeyPos);
+    std::string idxPath = dir + "/" + idxName + DB_FILE_INDEX_EXTENSION;
+
+    if (!DBFile::exists(idxPath.c_str())){
+        file_create(idxPath.c_str());
+    }
+
+    if (file_size(idxPath.c_str()) > 0) return;
+
+    //building header general informations
+    std::string header = "";
+    header += (char) idxType; //index type (1 byte)
+    header += (char) searchKeyPos; //field being used (1 byte)
+    std::cout << header.size() << '\n';
+
+    Index idx;
+    idx.name = idxName;
+    idx.type = idxType;
+    idx.referencingTable = this->name; 
+    idx.searchKey = searchKey;
+    idx.index_file.path = idxPath;
+
+    if (idxType == Index::Type::BPTree){
+        header.resize(header.size() + sizeof(uint32_t));
+        std::memcpy((char*) header.data() + header.size() - 4, &params.a1, sizeof(uint32_t)); //max children (4 bytes)
+
+        header += (char) params.a0;
+
+        BPTreeIDX bp_idx(idx, params.a1, params.a0);
+
+        this->indices.push_back(idx);
+    }
+    //... one if clause for each type
+
+    std::cout << header.size();
+    idx.index_file.write(header.c_str(), header.size());
 }
 
 //Struct Table::Record
