@@ -43,7 +43,21 @@ bool IOHelper::file_write(const char* filename, const char* data, long long coun
     else return false;
 }
 
-bool IOHelper::file_read(const char* filename, const int bytes_to_read, char* buffer, int* read_bytes){
+bool IOHelper::file_write(const char* filename, const char* data, long long count, long long startIdx){
+    if (!file_exists(filename) && !file_create(filename)) return false;
+
+    std::ofstream file(filename, std::ios::in | std::ios::out | std::ios::binary);
+    
+    if (file){
+        file.seekp(startIdx, std::ios::beg);
+        file.write(data, count);
+        file.flush();
+        return true;
+    }
+    else return false;
+}
+
+bool IOHelper::file_read(const char* filename, const size_t bytes_to_read, char* buffer, size_t* read_bytes){
     //sizeof(ready_bytes) must match bytes_to_read
 
     if (!file_exists(filename) && !file_create(filename)) return false;
@@ -58,7 +72,7 @@ bool IOHelper::file_read(const char* filename, const int bytes_to_read, char* bu
     } else return false;
 }
 
-bool IOHelper::file_read(const char* filename, const int bytes_to_read, char* buffer, int* read_bytes, long long startIdx){
+bool IOHelper::file_read(const char* filename, const size_t bytes_to_read, char* buffer, size_t* read_bytes, long long startIdx){
     //sizeof(ready_bytes) must match bytes_to_read
 
     if (!file_exists(filename) && !file_create(filename)) return false;

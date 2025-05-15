@@ -1,12 +1,18 @@
-<1 byte para tipo de indíce><1 byte para indicar qual campo está sendo usado como chave de busca><4 bytes quantidade filhos><1 byte para taxa de preenchimento> = 7 bytes 
+<1 byte para tipo de indíce><1 byte para indicar qual campo está sendo usado como chave de busca><4 bytes quantidade max filhos><1 byte para taxa de preenchimento> = 7 bytes 
 
 chave de busca: 4 bytes
 ponteiro: 4 bytes
 quantidade chave de busca: filhos - 1
 quantidade ponteiros: filhos + 1
 
-tamanho total do nó: 4*(filhos-1) + 4*(filhos+1) = 4*(filhos + filhos + 1 - 1) = 8*filhos bytes
+tamanho total do nó (folha e não folha): 4*(filhos-1) + 4*(filhos+1) = 4*(filhos + filhos + 1 - 1) = 8*filhos + 1
 offset = 7
 
-estrutura do nó:
-<id_pai><id_1f><c1>......<id_nf><cn><padding>
+estrutura do nó não folha:
+<é_folha:1byte><id_pai><id_1f><c1>......<id_nf><cn><id_n+1f>
+
+estrutura do nó folha:
+sk1: 4 bytes
+r_id: 4 bytes
+tamanho nó folha = 1 + 4 + 4 + 4 + 4*(filhos - 1) = 4*(filhos + 2) + 1
+<é_folha:1byte><id_pai><f_antid><f_postid><sk1:r_id1><sk2:r_id2>...<sk3:r_id3><padding>

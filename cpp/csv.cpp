@@ -44,7 +44,7 @@ CSV::CSVInfos CSV::readChunk(const char* filename, unsigned int dataRowsCount){
     size_t startByteIdx = fieldNames.size() + 1; //Skip first line
 
     char* buffer = (char*) malloc(sizeof(char) * READ_CHUNK);
-    int read_bytes = 1;
+    size_t read_bytes = 1;
 
     string rawRow = "";
     while (rowsRead < dataRowsCount && read_bytes > 0){

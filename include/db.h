@@ -5,6 +5,28 @@
 #include <vector>
 
 namespace DB{
+    class DBFile;
+    class Index;
+    class BPTreeIDX;
+    class Table;
+
+    struct Record{
+        std::vector<std::string> fields = {""};
+        std::vector<std::string> data = {""};
+        uint32_t rid;
+
+        void print();
+    };
+
+    struct SchemaInfos{
+        bool finished = false;
+        std::vector<std::string> names = {""}; //fields' names
+        std::vector<int> sizes = {-1}; //fields' size
+        int totalSize = -1; //sum of all fields' size
+        int field_count = -1;
+    };
+
+
     //Interface to access DB files
     class DBFile{
         private:
@@ -13,7 +35,7 @@ namespace DB{
             //read temporary info
             bool isReading = false; 
             char* read_buffer = nullptr; //Stores read data
-            int read_bytes = -1;  //Stores how many bytes were read in the last read operation
+            size_t read_bytes = -1;  //Stores how many bytes were read in the last read operation
 
         public:
             static DBFile open(const char* path);
@@ -23,10 +45,11 @@ namespace DB{
 
             void write(const char* data);
             void write(const char* data, long long count);
+            void write(const char* data, long long count, long long startIdx);
             
             //Reading pipeline
-            void startReading(int bytes);
-            void startReading(int bytes, int startIdx);
+            void startReading(size_t bytes);
+            void startReading(size_t bytes, size_t startIdx);
 
             char* getReadBuffer();
             int getReadBytes();
@@ -55,6 +78,9 @@ namespace DB{
 
             std::string referencingTable;
             std::string searchKey;
+            int searchKeyPos;
+
+            int idxInSpecificIndexArray;
 
             DBFile index_file;
 
@@ -63,7 +89,8 @@ namespace DB{
             Index::Type getType();
             std::string getReferencingTable();
             std::string getSearchKey();
-            DBFile getIndexFile();    
+            DBFile getIndexFile();
+            int getSearchKeyPos();
 
         friend class Table;
     };
@@ -72,28 +99,21 @@ namespace DB{
         private:
             int max_children;
             int fill_factor;
+            size_t node_size; //in bytes
 
+            std::string __buildNodeString();
+            size_t __getNodeStartReadingByte(uint32_t id);
+            void __insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_t rightChild); //This is for internal nodes!
         public:
             BPTreeIDX(Index base, int max_children, int fill_factor);
+
+            uint32_t findAppropriateLeaf(uint32_t search_key);
+            uint32_t insertEntry(Record r);
+
+            void printNodeInfo(uint32_t id);
     };
 
     class Table{
-        public:
-            struct SchemaInfos{
-                bool finished = false;
-                std::vector<std::string> names = {""}; //fields' names
-                std::vector<int> sizes = {-1}; //fields' size
-                int totalSize = -1; //sum of all fields' size
-                int field_count = -1;
-            };
-
-            struct Record{
-                std::vector<std::string> fields = {""};
-                std::vector<std::string> data = {""};
-
-                void print();
-            };
-
         private:
             std::string name;
 
@@ -110,17 +130,18 @@ namespace DB{
             std::vector<int> __getSchemaSizes();
             int __getSchemaFieldCount();
             SchemaInfos __load_schemaInfos();
-            SchemaInfos schemaInfos;
-
+            SchemaInfos schemaInfos; 
+        public:
             //index informations
             std::vector<Index> indices;
-        public:
+            std::vector<BPTreeIDX> indices_bp;
+
             static Table open(const char* tableName);
 
             DBFile getSchema();
             DBFile getRecords();
 
-            Table::SchemaInfos getSchemaInfos();
+            SchemaInfos getSchemaInfos();
 
             bool fieldExists(const char* fieldName);
 
@@ -133,7 +154,7 @@ namespace DB{
 
             //records building
             void insertRecord(std::vector<std::string> data); //Must follow schema order
-            Record getRecordById(int id);
+            Record getRecordById(uint32_t id);
 
             //index stuff
             void build_index(const char* searchKey, Index::Type idxType, Index::BuildingParams params);
