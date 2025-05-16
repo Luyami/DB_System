@@ -103,7 +103,7 @@ namespace DB{
 
             std::string __buildNodeString();
             size_t __getNodeStartReadingByte(uint32_t id);
-            void __insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_t rightChild); //This is for internal nodes!
+            void __insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_t leftChild, uint32_t rightChild); //This is for internal nodes!
         public:
             BPTreeIDX(Index base, int max_children, int fill_factor);
 

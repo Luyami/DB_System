@@ -14,5 +14,5 @@ estrutura do nó não folha:
 estrutura do nó folha:
 sk1: 4 bytes
 r_id: 4 bytes
-tamanho nó folha = 1 + 4 + 4 + 4 + 4*(filhos - 1) = 4*(filhos + 2) + 1
+tamanho nó folha = 1 + 4 + 4 + 4 + 8*(filhos - 1) = 8*(filhos - 1) + 4 * 3 + 1
 <é_folha:1byte><id_pai><f_antid><f_postid><sk1:r_id1><sk2:r_id2>...<sk3:r_id3><padding>
