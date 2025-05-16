@@ -116,7 +116,7 @@ void DBFile::stopReading(){
 //Class Index
 std::string  Index::getName()                {return name;}
 Index::Type  Index::getType()                {return type;}
-std::string  Index::getReferencingTable()    {return referencingTable;}
+Table*       Index::getReferencingTable()    {return referencingTable;}
 std::string  Index::getSearchKey()           {return searchKey;}
 DBFile       Index::getIndexFile()           {return index_file;}
 int          Index::getSearchKeyPos()        {return searchKeyPos;}
@@ -130,10 +130,10 @@ BPTreeIDX::BPTreeIDX(Index base, int max_children, int fill_factor){
     this->searchKeyPos     = base.getSearchKeyPos();
     this->index_file       = base.getIndexFile();
 
-    this->max_children = max_children;
+    this->max_children = max_children + 1000;
     this->fill_factor  = fill_factor;
 
-    this->node_size = 8*(max_children-1) + 4*3 + 1;
+    this->node_size = 8*(this->max_children-1) + 4*3 + 1;
 }
 
 //Internal Node is formatted as:
@@ -156,6 +156,13 @@ size_t BPTreeIDX::__getNodeStartReadingByte(uint32_t id){
     return 7 + (id - 1) * node_size;
 }
 
+int BPTreeIDX::getHeight(){
+    float n = this->referencingTable->records_file.size()/256;
+    float d = this->fill_factor*0.01 * (this->max_children - 1001);
+    int logV = std::ceil(n/d);
+    return 1 + std::log(logV)/std::log(this->fill_factor * 0.01 * (max_children - 1000));
+}
+
 uint32_t BPTreeIDX::findAppropriateLeaf(uint32_t search_key){
     uint32_t currentNodeId = 1; //1 is always for root
     bool isNodeLeaf = false;
@@ -166,12 +173,12 @@ uint32_t BPTreeIDX::findAppropriateLeaf(uint32_t search_key){
 
                 char* buffer = index_file.getReadBuffer();
                 size_t bytes = index_file.getReadBytes();
-
-                if (buffer[0] == 1){ //is leaf
+                
+                if (buffer[0] == (char)1){ //is leaf
                     isNodeLeaf = true;
-                    break;
+                    return currentNodeId;
                 }
-
+                
                 //if it isn't leaf, lets go down!!!!
                 uint32_t currentSk;
                 int currentSkPos = 0;
@@ -205,7 +212,7 @@ void BPTreeIDX::__insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_
 
     static int count = 0;
     ++count;
-    std::cout << "e" << '\n';
+  
     if (count > 4) return;
 
     size_t nodeFirstByte = __getNodeStartReadingByte(nodeId);
@@ -224,7 +231,6 @@ void BPTreeIDX::__insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_
                 std::memcpy(&maybeEmptySk, buffer + 5 + pairCount * 8 + 4, sizeof(uint32_t));
 
                 if (pointersANDsks.size() == max_children - 1){ //Node is full
-                    std::cout << searchKey << " " << node_size << " bytes" << '\n';
                     std::memcpy(&lastPointer, buffer + 5 + (max_children - 2) * 8, sizeof(uint32_t));
 
                     //lets build the theoretical node with max_children + 1 children
@@ -242,6 +248,7 @@ void BPTreeIDX::__insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_
                     }
 
                     pointersANDsks[newSearchKeyPos] = pair<uint32_t, uint32_t>(searchKey, left_child);
+            
                     if (newSearchKeyPos < pointersANDsks.size() - 1){
                         pointersANDsks[newSearchKeyPos + 1].second = right_child;
                     }
@@ -262,12 +269,12 @@ void BPTreeIDX::__insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_
 
                     if (parentId == 0){ //It's a root node! We have to create a new root. its id will be secondNodeId + 1
                         newRoot = __buildNodeString();
-                        newRoot[0] = 0;
+                        newRoot[0] = (char) 0;
                     }
 
                     int median_index = pointersANDsks.size()/2;
 
-                    firstNode[0] = 0;
+                    firstNode[0] = (char) 0;
                     parentId = parentId == 0 ? rootId : parentId;
                     std::memcpy((char*) firstNode.data() + 1, &parentId, sizeof(uint32_t));
                     for (int i = 0; i < median_index; ++i){
@@ -276,7 +283,7 @@ void BPTreeIDX::__insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_
                     }
                     std::memcpy((char*) firstNode.data() + 5 + median_index * 8, &pointersANDsks[median_index].second, sizeof(uint32_t));
 
-                    secondNode[0] = 0;
+                    secondNode[0] = (char) 0;
                     std::memcpy((char*) secondNode.data() + 1, &parentId, sizeof(uint32_t));
                     for (int i = median_index + 1; i < pointersANDsks.size(); ++i){
                         std::memcpy((char*) secondNode.data() + 5 + (i - median_index + 1) * 8, &pointersANDsks[i].second, sizeof(uint32_t)); //child id
@@ -284,12 +291,29 @@ void BPTreeIDX::__insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_
                     }
                     std::memcpy((char*) firstNode.data() + 5 + (max_children - 2) * 8, &lastPointer, sizeof(uint32_t));
 
-                    std::cout << "saving" << '\n';
+                    //updating child's parents
+                    std::cout << "asddsad";
+                    if (newSearchKeyPos < median_index){
+                        std::string node_id = "";
+                        std::memcpy((char*) node_id.data(), &firstNodeId, sizeof(uint32_t));
+                        
+                        index_file.write(node_id.data(), node_id.size(), __getNodeStartReadingByte(left_child) + 1);
+                        index_file.write(node_id.data(), node_id.size(), __getNodeStartReadingByte(right_child) + 1);  
+                    }
+                    else{
+                        std::string node_id = "";
+                        std::memcpy((char*) node_id.data(), &secondNodeId, sizeof(uint32_t));
+                        
+                        index_file.write(node_id.data(), node_id.size(), __getNodeStartReadingByte(left_child) + 1);
+                        index_file.write(node_id.data(), node_id.size(), __getNodeStartReadingByte(right_child) + 1);  
+                    }
+
                     index_file.write(firstNode.data(), node_size, __getNodeStartReadingByte(firstNodeId));
                     index_file.write(secondNode.data(), node_size);
                     if (!newRoot.empty()) index_file.write(newRoot.data(), node_size);
-                    std::cout << "saved" << '\n';
+
                     index_file.stopReading();
+
                     __insertRecursively(pointersANDsks[median_index].second, parentId, firstNodeId, secondNodeId);
 
                     break;
@@ -332,8 +356,6 @@ void BPTreeIDX::__insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_
                     std::memcpy(&cPointer, buffer + 5 + pairCount * 8, sizeof(uint32_t));
                     std::memcpy(&sk, buffer + 5 + pairCount * 8 + 4, sizeof(uint32_t));
 
-                    std::cout << searchKey << " " << cPointer << '\n';
-
                     pointersANDsks.push_back(pair<uint32_t, uint32_t>(sk, cPointer));
                 }
 
@@ -346,13 +368,14 @@ void BPTreeIDX::__insertRecursively(uint32_t searchKey, uint32_t nodeId, uint32_
 
 uint32_t BPTreeIDX::insertEntry(Record r){
     //For now, search keys can only be non-negative and non-zero numerical values!
-
+    
     size_t file_size = index_file.size();
     size_t newId = (file_size - 7)/node_size + 1;
     
     std::string node;
-    uint32_t sk = std::stoi(r.data[searchKeyPos]) + 1;
 
+    uint32_t sk = std::stoi(r.data[searchKeyPos]);
+ 
     if (file_size - 7 == 0){ //Doesn't have any node! Lets build a leaf-root
         node = __buildNodeString();
 
@@ -399,23 +422,23 @@ uint32_t BPTreeIDX::insertEntry(Record r){
                             std::memcpy(buffer + 13 + 8 * i + 4, &rids[i].second, sizeof(uint32_t)); //Copying r_id
                         }
                         
-                        index_file.write(buffer, bytes, node_firstByte);
+                        index_file.write(buffer, node_size, node_firstByte);
 
                         break;
                     }
                     else{ //There is something in slot
                         uint32_t thisSK;
                         uint32_t thisRID;
-
+                        
                         std::memcpy(&thisSK, buffer + 13 + 8 * tupleCount, sizeof(uint32_t));
                         std::memcpy(&thisRID, buffer + 13 + 8 * tupleCount + 4, sizeof(uint32_t));
-
+             
                         rids.push_back(std::pair<uint32_t, uint32_t>(thisSK, thisRID));
                     }
 
                     ++tupleCount;
                 }
-
+       
                 if (isLeafFull){ //Leaf is full! lets split
                     rids.push_back(std::pair<uint32_t, uint32_t>(sk, r.rid));
                     std::sort(rids.begin(), rids.end());
@@ -430,7 +453,7 @@ uint32_t BPTreeIDX::insertEntry(Record r){
                     std::string secondLN = __buildNodeString();
 
                     //first leaf node
-                    firstLN[0] = 1;
+                    firstLN[0] = (char) 1;
                     std::memcpy((char*) firstLN.data() + 1, buffer + 1, sizeof(uint32_t));
                     for (int i = 0; i < keys_in_firstLeafNode; ++i){
                         std::memcpy((char*) firstLN.data() + 13 + 8 * i, &rids[i].first, sizeof(uint32_t)); //Copying search key
@@ -438,7 +461,8 @@ uint32_t BPTreeIDX::insertEntry(Record r){
                     }
 
                     //second leaf node
-                    secondLN[0] = 1;
+                    secondLN[0] = (char) 1;
+
                     std::memcpy((char*) secondLN.data() + 1, buffer + 1, sizeof(uint32_t));
                     for (int i = 0; i < keys_in_secondLeafNode; ++i){
                         std::memcpy((char*) secondLN.data() + 13 + 8 * i, &rids[keys_in_firstLeafNode + i].first, sizeof(uint32_t)); //Copying search key
@@ -452,7 +476,7 @@ uint32_t BPTreeIDX::insertEntry(Record r){
                         parent_id = newId + 1;
                         std::cout << "desont hvav arnet" << '\n';
                         std::string newParent = __buildNodeString();
-                        newParent[0] = 0;
+                        newParent[0] = (char) 0;
                         std::memcpy((char*) newParent.data() + 5, &leaf_id, sizeof(uint32_t)); //left child
                         std::memcpy((char*) newParent.data() + 9, &median_sk, sizeof(uint32_t)); //sk
                         std::memcpy((char*) newParent.data() + 13, &newId, sizeof(uint32_t)); //right child
@@ -485,6 +509,34 @@ uint32_t BPTreeIDX::insertEntry(Record r){
     }
 
     return newId;
+}
+
+std::vector<Record> BPTreeIDX::getRecords(int searchKey){
+    uint32_t leaf_id = findAppropriateLeaf(searchKey);
+
+    std::vector<Record> records;
+
+    {
+        index_file.startReading(node_size, __getNodeStartReadingByte(leaf_id));
+
+            char* buffer = index_file.getReadBuffer();
+
+            for (int i = 0; i < max_children - 1; ++i){
+                uint32_t sk;
+                uint32_t rid;
+                
+                std::memcpy(&sk, buffer + 13 + i * 8, sizeof(uint32_t));
+                std::memcpy(&rid, buffer + 13 + i * 8 + 4, sizeof(uint32_t));
+                
+                if (sk == searchKey){
+                    records.push_back(referencingTable->getRecordById(rid));
+                }
+            }
+
+        index_file.stopReading();
+    }
+
+    return records;
 }
 
 void BPTreeIDX::printNodeInfo(uint32_t id){
@@ -771,8 +823,10 @@ void Table::insertRecord(std::vector<std::string> data){
     for (int i = 0; i < RECORDS_PAGE_SIZE - noPaddingBytes; ++i){
         data_string += (char) 3;
     }
-
+    
     records_file.write(data_string.c_str(), data_string.size());
+
+    if (indices_bp.size() > 0) this->indices_bp[0].insertEntry(this->getRecordById(records_file.size()/256));
 }
 
 Record Table::getRecordById(uint32_t id){
@@ -828,7 +882,7 @@ void Table::build_index(const char* searchKey, Index::Type idxType, Index::Build
 
     std::string idxName = this->name + std::to_string((int) idxType) + "_" + std::to_string(searchKeyPos);
     std::string idxPath = dir + "/" + idxName + DB_FILE_INDEX_EXTENSION;
-
+    
     if (!DBFile::exists(idxPath.c_str())){
         file_create(idxPath.c_str());
     }
@@ -839,12 +893,11 @@ void Table::build_index(const char* searchKey, Index::Type idxType, Index::Build
     std::string header = "";
     header += (char) idxType; //index type (1 byte)
     header += (char) searchKeyPos; //field being used (1 byte)
-    std::cout << header.size() << '\n';
-
+   
     Index idx;
     idx.name = idxName;
     idx.type = idxType;
-    idx.referencingTable = this->name; 
+    idx.referencingTable = this; 
     idx.searchKey = searchKey;
     idx.searchKeyPos = searchKeyPos;
     idx.index_file.path = idxPath;
@@ -852,9 +905,9 @@ void Table::build_index(const char* searchKey, Index::Type idxType, Index::Build
     if (idxType == Index::Type::BPTree){
         header.resize(header.size() + sizeof(uint32_t));
         std::memcpy((char*) header.data() + header.size() - 4, &params.a1, sizeof(uint32_t)); //max children (4 bytes)
-
+        
         header += (char) params.a0;
-
+       
         idx.idxInSpecificIndexArray = indices_bp.size();
         BPTreeIDX bp_idx(idx, params.a1, params.a0);
 
@@ -863,7 +916,17 @@ void Table::build_index(const char* searchKey, Index::Type idxType, Index::Build
     //... one if clause for each type
 
     indices.push_back(idx);
-    idx.index_file.write(header.c_str(), header.size());
+    idx.index_file.write(header.data(), header.size());
+}
+
+std::vector<Record> Table::getRecordsBy(const char* field, int searchKey){
+    //finding index
+    BPTreeIDX* bp_idx;
+    for (int i = 0; i < indices_bp.size(); ++i){
+        if (indices_bp[i].getSearchKey() == field) bp_idx = &indices_bp[i];
+    }
+
+    return bp_idx->getRecords(searchKey);
 }
 
 //Struct Table::Record

@@ -1,0 +1,1 @@
+id:4;rotulo:40;ano-colheita:4;tipo:8;

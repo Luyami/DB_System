@@ -1,5 +1,8 @@
 #include "csvhelper.h"
 #include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
 
 #define READ_CHUNK 8000//in bytes
 
@@ -29,41 +32,21 @@ vector<string> CSV::splitRow(string rawRow){
 }
 
 CSV::CSVInfos CSV::readChunk(const char* filename, unsigned int dataRowsCount){
-    using namespace CSV;
+    std::vector<std::string> lines;
+    std::ifstream file(filename);
 
+    std::string line;
     CSVInfos infos;
 
-    //Getting fields' names
-    std::string fieldNames;
-    IOHelper::file_getLine(filename, 0, &fieldNames);
+    //getting infos
+    std::getline(file, line);
+    infos.fields = splitRow(line);
 
-    infos.fields = splitRow(fieldNames);
-
-    //Getting data
-    int rowsRead = 0;
-    size_t startByteIdx = fieldNames.size() + 1; //Skip first line
-
-    char* buffer = (char*) malloc(sizeof(char) * READ_CHUNK);
-    size_t read_bytes = 1;
-
-    string rawRow = "";
-    while (rowsRead < dataRowsCount && read_bytes > 0){
-        IOHelper::file_read(filename, READ_CHUNK, buffer, &read_bytes, startByteIdx);
-
-        for (int i = 0; i < read_bytes; ++i){
-            if (rowsRead == dataRowsCount) break;
-
-            if (buffer[i] == '\n'){
-                vector<string> sRow = splitRow(rawRow);
-                infos.data.push_back(sRow);
-              
-                ++rowsRead;
-                rawRow = "";
-            }
-            else rawRow += buffer[i];
-        }
-        startByteIdx += read_bytes;
+    for (int i = 0; i < dataRowsCount && std::getline(file, line); ++i) {
+        infos.data.push_back(splitRow(line));
     }
+
+    file.close();
 
     return infos;
 }

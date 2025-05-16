@@ -33,7 +33,7 @@ bool IOHelper::file_write(const char* filename, const char* data){
 bool IOHelper::file_write(const char* filename, const char* data, long long count){
     if (!file_exists(filename) && !file_create(filename)) return false;
 
-    std::ofstream file(filename, std::ios::app);
+std::ofstream file(filename, std::ios::binary | std::ios::in | std::ios::out | std::ios::ate);
     
     if (file){
         file.write(data, count);

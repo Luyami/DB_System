@@ -8,50 +8,91 @@ int main(){
     using namespace DB;
     using namespace CSV;
 
-    Table t = Table::open("teste");
+    //Creating aux table
+    Table wines = Table::open("vinhos");
 
     {
-        t.startBuildingSchema();
+        wines.startBuildingSchema();
 
-            t.addField("name", 30);
-            t.addField("age", 2);
+            wines.addField("id", 4);
+            wines.addField("rotulo", 40);
+            wines.addField("ano-colheita", 4);
+            wines.addField("tipo", 8);
 
-        t.stopBuildingSchema();
+        wines.stopBuildingSchema();
+    }
+    wines.build_index("ano-colheita", DB::Index::Type::BPTree, DB::Index::BuildingParams{50, 10});
+    CSVInfos wines_csv = readChunk("datafiles/vinhos.csv", 1000);
+    for (std::vector<std::string> data: wines_csv.data){
+        wines.insertRecord(data);
     }
 
-    t.insertRecord({"luiz","37"});
-    t.insertRecord({"joelio", "20"});
-    t.insertRecord({"caba", "2"});
-    t.insertRecord({"idk", "5"});
-    t.insertRecord({"idk", "6"});
-    t.insertRecord({"idk", "9"});
-    
-    t.insertRecord({"idk", "11"});
-    t.insertRecord({"idk", "12"});
-    t.insertRecord({"idk", "13"});
-    t.insertRecord({"idk", "14"});
-    t.insertRecord({"idk", "15"});
-    t.insertRecord({"idk", "16"});
-    t.insertRecord({"idk", "17"});
-    t.build_index("age", Index::Type::BPTree, Index::BuildingParams{50,4});
-    BPTreeIDX bi = t.indices_bp[0];
-    bi.insertEntry(t.getRecordById(3));
-    bi.insertEntry(t.getRecordById(1));
-    bi.insertEntry(t.getRecordById(2));
-    bi.insertEntry(t.getRecordById(4));
-    bi.insertEntry(t.getRecordById(5));
-    bi.insertEntry(t.getRecordById(6));
-    bi.insertEntry(t.getRecordById(7));
-    bi.insertEntry(t.getRecordById(8));
-    bi.printNodeInfo(1);
-    std::cout << '\n';
-    bi.printNodeInfo(2);
-    std::cout << '\n';
-    bi.printNodeInfo(3);
-    std::cout << '\n';
-    bi.printNodeInfo(4);
-    std::cout << '\n';
-    bi.printNodeInfo(5);
+    //
+    Table trab = Table::open("trab");
+
+    {
+        trab.startBuildingSchema();
+
+            trab.addField("id", 4);
+            trab.addField("rotulo", 40);
+            trab.addField("ano-colheita", 4);
+            trab.addField("tipo", 6);
+
+        trab.stopBuildingSchema();
+    }
+
+    std::ifstream infile("in.txt");
+    std::string line;
+
+    int max_children = -1;
+
+    if (!std::getline(infile, line)) {
+        std::cerr << "Arquivo vazio ou inválid!!!!!!!!!!.\n";
+        return 1;
+    }
+
+    if (line.rfind("FLH/", 0) == 0) {
+        max_children = std::stoi(line.substr(4));
+    } else {
+        std::cerr << "Linha FLH invalida.\n";
+        return 1;
+    }
+
+    uint32_t m = max_children;
+
+    trab.build_index("ano-colheita", DB::Index::Type::BPTree, DB::Index::BuildingParams{50, 10});
+
+    DBFile out = DBFile::open("out.txt");
+
+    while (std::getline(infile, line)) {
+        if (line.rfind("INC:", 0) == 0) {
+            int key = std::stoi(line.substr(4));
+
+            std::vector<Record> rcs = wines.getRecordsBy("ano-colheita", key);
+            
+            for (Record r: rcs){
+                trab.insertRecord(r.data);
+            }
+            std::string outData = "INC:" + std::to_string(key) + '/' + std::to_string(rcs.size()) + '\n';
+            out.write(outData.data(), outData.size());
+
+        } else if (line.rfind("BUS=:", 0) == 0) {
+            int key = std::stoi(line.substr(5));
+            
+            std::vector<Record> rcs = trab.getRecordsBy("ano-colheita", key);
+
+            for (Record r: rcs){
+                r.print();
+            }
+            std::string outData = "BUS:=" + std::to_string(key) + '/' + std::to_string(rcs.size()) + '\n';
+            out.write(outData.data(), outData.size());
+        } else {
+            std::cerr << "Comando invalido: " << line << "\n";
+        }
+    }
+
+    std::string outData = "H" + '/' + std::to_string(trab.indices_bp[0].getHeight()) + '\n';
+    out.write(outData.data(), outData.size());
 
     return 0;
 }

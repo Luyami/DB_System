@@ -76,7 +76,7 @@ namespace DB{
             std::string name;
             Index::Type type;
 
-            std::string referencingTable;
+            Table* referencingTable;
             std::string searchKey;
             int searchKeyPos;
 
@@ -87,7 +87,7 @@ namespace DB{
         public:
             std::string getName();
             Index::Type getType();
-            std::string getReferencingTable();
+            Table* getReferencingTable();
             std::string getSearchKey();
             DBFile getIndexFile();
             int getSearchKeyPos();
@@ -110,15 +110,16 @@ namespace DB{
             uint32_t findAppropriateLeaf(uint32_t search_key);
             uint32_t insertEntry(Record r);
 
+            int getHeight();
+
+            std::vector<Record> getRecords(int searchKey);
+
             void printNodeInfo(uint32_t id);
     };
 
     class Table{
         private:
             std::string name;
-
-            DBFile schema_file;
-            DBFile records_file;
 
             //schema building temporary infos
             bool isBuildingSchema = false;
@@ -132,6 +133,9 @@ namespace DB{
             SchemaInfos __load_schemaInfos();
             SchemaInfos schemaInfos; 
         public:
+            DBFile schema_file;
+            DBFile records_file;
+
             //index informations
             std::vector<Index> indices;
             std::vector<BPTreeIDX> indices_bp;
@@ -155,6 +159,7 @@ namespace DB{
             //records building
             void insertRecord(std::vector<std::string> data); //Must follow schema order
             Record getRecordById(uint32_t id);
+            std::vector<Record> getRecordsBy(const char* field, int searchKey);
 
             //index stuff
             void build_index(const char* searchKey, Index::Type idxType, Index::BuildingParams params);
